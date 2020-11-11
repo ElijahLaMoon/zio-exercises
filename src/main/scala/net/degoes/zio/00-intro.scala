@@ -276,7 +276,7 @@ object PromptName extends App {
     left: ZIO[R, E, A],
     right: ZIO[R, E, B]
   ): ZIO[R, E, B] =
-    ???
+    left.flatMap(_ => right)
 }
 
 object ForComprehension extends App {
@@ -291,10 +291,11 @@ object ForComprehension extends App {
    * the for comprehension will be translated by Scala into a `flatMap`,
    * except for the final line, which will be translated into a `map`.
    */
-  def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
-    putStrLn("What is your name?").flatMap(
-      _ => readLine.flatMap(name => putStrLn(s"Your name is: ${name}").map(_ => ExitCode.success))
-    )
+  def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] = for {
+      _    <- putStrLn("What is your name?")
+      name <- readLine
+      _    <- putStrLn(s"Your name is: $name")
+    } yield ExitCode.success
 }
 
 object ForComprehensionBackward extends App {
@@ -311,12 +312,10 @@ object ForComprehensionBackward extends App {
    * which will translate to a `map`.
    */
   def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
-    for {
-      _   <- putStrLn("How old are you?")
-      age <- readInt
-      _ <- if (age < 18) putStrLn("You are a kid!")
-          else putStrLn("You are all grown up!")
-    } yield ExitCode.success
+    putStrLn("How old are you?").flatMap(_ => readInt.flatMap {
+      case age if age < 18 => putStrLn("You are a kid!")
+      case _ => putStrLn("You are all grown up!")
+    }.map(_ => ExitCode.success))
 }
 
 object NumberGuesser extends App {
@@ -325,9 +324,9 @@ object NumberGuesser extends App {
 
   private val readLine = getStrLn.orDie
 
-  def analyzeAnswer(random: Int, guess: String) =
+  def analyzeAnswer(random: Int, guess: String): URIO[Console, Unit] =
     if (random.toString == guess.trim) putStrLn("You guessed correctly!")
-    else putStrLn(s"You did not guess correctly. The answer was ${random}")
+    else putStrLn(s"You did not guess correctly. The answer was $random")
 
   /**
    * EXERCISE
@@ -336,8 +335,12 @@ object NumberGuesser extends App {
    * the number (using `getStrLn`), feeding their response to `analyzeAnswer`,
    * above.
    */
-  def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
-    ???
+  def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] = for {
+    randomInt <- nextInt
+    _         <- putStrLn("Guess the number: ")
+    userGuess <- readLine
+    _         <- analyzeAnswer(randomInt, userGuess)
+  } yield ExitCode.success
 }
 
 object SingleSideEffect extends App {
@@ -348,9 +351,9 @@ object SingleSideEffect extends App {
    * Using ZIO.effect, convert the side-effecting of `println` into a pure
    * functional effect.
    */
-  def myPrintLn(line: String): Task[Unit] = ???
+  def myPrintLn(line: String): Task[Unit] = ZIO.effect(println(line))
 
-  def run(args: List[String]) =
+  def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
     myPrintLn("Hello World!").exitCode
 }
 
@@ -361,7 +364,7 @@ object MultipleSideEffects extends App {
    * into a functional effect, which describes the action of printing a line
    * of text to the console, but which does not actually perform the print.
    */
-  def putStrLn(line: String): Task[Unit] = ???
+  def putStrLn(line: String): Task[Unit] = ZIO.effect(println(line))
 
   /**
    * Using `ZIO.effect`, wrap Scala's `scala.io.StdIn.readLine()` method to
@@ -369,12 +372,12 @@ object MultipleSideEffects extends App {
    * of printing a line of text to the console, but which does not actually
    * perform the print.
    */
-  val getStrLn: Task[String] = ???
+  val getStrLn: Task[String] = ZIO.effect(scala.io.StdIn.readLine)
 
   def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
     (for {
       _    <- putStrLn("Hello, what is your name?")
       name <- getStrLn
-      _    <- putStrLn(s"Good to meet you, ${name}!")
+      _    <- putStrLn(s"Good to meet you, $name!")
     } yield ()).exitCode
 }
